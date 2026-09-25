@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>听写练习 · Dictation</title>
+<script src="words.js"></script>
+<script src="audio/manifest.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3/dist/hanzi-writer.min.js"></script>
+<style>
+  :root{
+    --paper:#EFE6D6; --card:#E4D7C0; --rule:#CDC0A7;
+    --ink:#2E2A24; --ink2:#4C4536; --mute:#7C7160;
+    --seal:#AE3826; --sheet:#F7F1E4;
+    --serif:"Iowan Old Style","Palatino Linotype","Book Antiqua",Palatino,Georgia,"Times New Roman",serif;
+    --sans:"Avenir Next","Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+    --hanzi:"Songti SC","STSong","Noto Serif SC","Source Han Serif SC","Noto Serif CJK SC","SimSun",serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;min-height:100vh}
+  .wrap{max-width:760px;margin:0 auto;padding:28px 20px 40px}
+  button{font:inherit;cursor:pointer}
+  button:focus-visible{outline:2px solid var(--seal);outline-offset:2px}
+
+  header{display:flex;align-items:center;gap:14px;margin-bottom:22px}
+  .seal{width:40px;height:40px;border:1.6px solid var(--seal);display:grid;place-items:center;
+        font-family:var(--hanzi);font-size:20px;color:var(--seal);flex:none}
+  header h1{font-family:var(--serif);font-size:26px;margin:0;line-height:1.1}
+  header h1 .zh{font-family:var(--hanzi);margin-right:10px}
+  header p{margin:3px 0 0;font-family:var(--serif);font-style:italic;color:var(--mute);font-size:14.5px}
+
+  /* mode switch */
+  .mode{display:inline-flex;border:1px solid var(--ink);margin-bottom:16px}
+  .mode button{border:0;background:transparent;color:var(--ink);height:36px;padding:0 16px;font-size:14px}
+  .mode button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+  .mode .zh{font-family:var(--hanzi);margin-right:6px}
+
+  .pick{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:8px}
+  .pick .lbl{font-size:13px;color:var(--mute);margin-right:6px}
+  .chip{border:1px solid var(--rule);background:transparent;color:var(--ink2);min-width:38px;height:32px;padding:0 10px;font-size:13.5px}
+  .chip[aria-pressed="true"]{background:var(--seal);border-color:var(--seal);color:var(--paper)}
+  .chip.all{margin-left:6px}
+  .count{font-size:13px;color:var(--mute);margin:0 0 18px}
+
+  .card{background:var(--card);border:1px solid var(--rule);padding:22px 24px 24px}
+  .top{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;color:var(--mute);margin-bottom:18px}
+  .top b{color:var(--ink);font-weight:600}
+  .listen{display:flex;gap:12px}
+  .play{flex:1;height:96px;background:var(--sheet);border:1.5px solid var(--seal);color:var(--seal);
+        display:flex;align-items:center;justify-content:center;gap:14px;font-family:var(--serif);font-size:20px}
+  .play svg{width:30px;height:30px}
+  .play.speaking{background:#FBF5EA}
+  .slow{width:120px;background:transparent;border:1px solid var(--rule);color:var(--ink2);font-size:14px}
+  .slow small{display:block;color:var(--mute);font-size:11.5px;margin-top:2px}
+  .play:disabled,.slow:disabled{opacity:.4;cursor:default}
+
+  .sheet{margin-top:16px;background:var(--sheet);border:1px solid var(--rule);min-height:210px;
+         display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:22px}
+  .hint{color:var(--mute);font-family:var(--serif);font-style:italic;font-size:15px;margin:0}
+  .hz{font-family:var(--hanzi);font-size:54px;line-height:1.15;margin:0}
+  .py{font-family:var(--serif);font-weight:700;font-size:30px;color:var(--seal);margin:8px 0 0}
+  .en{font-family:var(--serif);font-style:italic;font-size:16px;color:var(--ink2);margin:8px 0 0}
+  .meta{font-size:12.5px;color:var(--mute);margin:10px 0 0}
+  .reveal{animation:pop .32s cubic-bezier(.2,1.4,.4,1)}
+  @keyframes pop{from{opacity:0;transform:scale(1.06)}to{opacity:1;transform:none}}
+
+  /* character mode: one 田字格 square per character */
+  .strokes{display:flex;flex-wrap:wrap;justify-content:center;gap:10px}
+  .tzg{width:var(--sz);height:var(--sz);position:relative;background:#FBF7EE url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'><rect x='.5' y='.5' width='99' height='99' fill='none' stroke='%23B5A68B' stroke-width='1'/><path d='M50 0V100M0 50H100' stroke='%23CDC0A7' stroke-width='.8' stroke-dasharray='3 2.5'/></svg>") center/100% 100% no-repeat}
+  .tzg .fallback{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--hanzi);font-size:calc(var(--sz)*.72)}
+  .replay{margin-top:12px;border:0;background:transparent;color:var(--seal);font-size:13px;text-decoration:underline;text-underline-offset:3px}
+
+  .actions{display:flex;gap:10px;margin-top:16px}
+  .btn{flex:1;height:48px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);font-size:15px}
+  .btn.ghost{background:transparent;color:var(--ink);border-color:var(--rule)}
+  .btn.miss{background:transparent;color:var(--seal);border-color:var(--seal)}
+
+  .notice{border-left:3px solid var(--seal);background:var(--sheet);padding:10px 14px;font-size:13.5px;line-height:1.5;color:var(--ink2);margin:0 0 16px}
+  .foot{display:flex;flex-wrap:wrap;gap:10px 24px;justify-content:space-between;margin-top:18px;font-size:12.5px;color:var(--mute)}
+  kbd{font:inherit;border:1px solid var(--rule);padding:0 5px;color:var(--ink2)}
+  .done h2{font-family:var(--serif);font-size:24px;margin:0 0 6px}
+  .done p{margin:0;color:var(--ink2)}
+  .missed{font-family:var(--hanzi);font-size:18px;margin-top:10px !important}
+  @media (max-width:520px){.hz{font-size:44px}.py{font-size:25px}.slow{width:92px}.play{height:84px;font-size:18px}}
+  @media (prefers-reduced-motion:reduce){.reveal{animation:none}}
+  /* view tabs */
+  .tabs{display:flex;gap:22px;border-bottom:1px solid var(--rule);margin-bottom:14px}
+  .tabs button{border:0;background:transparent;padding:0 0 9px;font-size:14.5px;color:var(--mute);border-bottom:2px solid transparent;margin-bottom:-1px}
+  .tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--seal)}
+
+  /* history nav inside the card */
+  .nav{border:0;background:transparent;color:var(--ink2);font-size:13px;padding:0}
+  .nav:disabled{color:var(--rule);cursor:default}
+  .nav:not(:disabled):hover{color:var(--seal)}
+  .top .mid{display:flex;gap:16px;align-items:baseline}
+  .past{font-size:12.5px;color:var(--mute);margin:12px 0 0}
+  .past b{font-weight:600}
+  .past .ok{color:var(--ink)} .past .no{color:var(--seal)}
+
+  /* progress view */
+  .sum{display:flex;flex-wrap:wrap;gap:6px 20px;font-size:13.5px;color:var(--ink2);margin-bottom:10px}
+  .sum b{font-weight:600;color:var(--ink)}
+  .key{display:inline-block;width:10px;height:10px;margin-right:6px;vertical-align:-1px}
+  .key.known{background:var(--ink)} .key.work{background:var(--seal)} .key.new{border:1px dashed var(--mute)}
+  .bar{display:flex;height:8px;background:var(--sheet);border:1px solid var(--rule);margin-bottom:16px}
+  .bar i{display:block;height:100%}
+  .bar .known{background:var(--ink)} .bar .work{background:var(--seal)}
+  .pacts{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:20px}
+  .pacts .btn{flex:none;padding:0 18px;height:42px;font-size:14px}
+  .link{border:0;background:transparent;color:var(--mute);font-size:12.5px;text-decoration:underline;text-underline-offset:3px;margin-left:auto}
+  .lesson{margin-bottom:18px}
+  .lesson h3{font-family:var(--serif);font-size:16px;margin:0 0 8px;font-weight:700}
+  .lesson h3 span{font-family:var(--sans);font-weight:400;font-size:12.5px;color:var(--mute);margin-left:8px}
+  .words{display:flex;flex-wrap:wrap;gap:6px}
+  .wchip{font-family:var(--hanzi);font-size:17px;min-width:40px;height:36px;padding:0 9px;background:var(--sheet);color:var(--mute);border:1px dashed var(--rule)}
+  .wchip.known{background:var(--ink);color:var(--paper);border:1px solid var(--ink)}
+  .wchip.work{background:var(--sheet);color:var(--seal);border:1.5px solid var(--seal)}
+  .wchip:hover{outline:1px solid var(--seal);outline-offset:1px}
+  .pnote{font-size:12.5px;color:var(--mute);margin:18px 0 0;line-height:1.5}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="seal">听</div>
+    <div>
+      <h1><span class="zh">听写练习</span>Dictation</h1>
+      <p id="tagline"></p>
+    </div>
+  </header>
+
+  <div id="notice" class="notice" hidden></div>
+
+  <div class="mode" role="group" aria-label="What to write">
+    <button data-mode="pinyin"><span class="zh">拼音</span>Write pinyin</button>
+    <button data-mode="characters"><span class="zh">汉字</span>Write characters</button>
+  </div>
+
+  <div class="pick" id="pick"><span class="lbl">Lessons</span></div>
+  <p class="count" id="count"></p>
+
+  <div class="tabs" role="tablist">
+    <button role="tab" data-tab="practice">Practice</button>
+    <button role="tab" data-tab="progress">My progress</button>
+  </div>
+
+  <main class="card" id="practice">
+    <div class="top">
+      <span class="mid">
+        <button class="nav" id="prev" aria-label="Previous word">← Previous</button>
+        <span id="where"></span>
+      </span>
+      <span id="tally"></span>
+    </div>
+    <div class="listen">
+      <button class="play" id="play" aria-label="Play the word">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/></svg>
+        <span>Play</span>
+      </button>
+      <button class="slow" id="slow">Even slower<small>for a second listen</small></button>
+    </div>
+    <div class="sheet" id="sheet"></div>
+    <div class="actions" id="actions"></div>
+  </main>
+
+  <section class="card" id="progress" hidden></section>
+
+  <div class="foot">
+    <span><kbd>Space</kbd> play &nbsp; <kbd>S</kbd> even slower &nbsp; <kbd>Enter</kbd> show answer / got it &nbsp; <kbd>A</kbd> again &nbsp; <kbd>←</kbd><kbd>→</kbd> earlier words &nbsp; <kbd>R</kbd> replay strokes</span>
+    <span id="audioNote"></span>
+  </div>
+</div>
+
+<script>
+/* ================= settings ================= */
+/* Until real recordings exist, words without an MP3 use the device voice so the flow can be tested.
+   Set to false once audio/ is filled: words without a recording are then left out of practice. */
+const PLACEHOLDER_VOICE = true;
+
+/* Playback speed for recordings: Play uses the first, "Even slower" the second (1 = as recorded). */
+const PLAY_RATE = 0.8, SLOWER_RATE = 0.6;
+
+/* ================= data ================= */
+// words.js is built by build.py, which already drops awkward entries (grammar patterns, mixed scripts)
+const HAS_AUDIO = new Set(window.AUDIO_FILES || []);
+const POOL = (window.WORDS || []).filter(w => PLACEHOLDER_VOICE || HAS_AUDIO.has(w.w));
+const LESSONS = [...new Set(POOL.map(w => w.l).filter(Boolean))].sort((a,b) => a - b);
+const POS = {n:"noun",v:"verb",pn:"proper noun",adj:"adjective",vo:"verb-object",adv:"adverb",m:"measure word",
+  pr:"pronoun",conj:"conjunction",t:"time word",qpr:"question pronoun",p:"particle",nu:"numeral",mv:"modal verb",
+  prep:"preposition",vc:"verb complement",interj:"interjection",qp:"question particle",prefix:"prefix"};
+
+/* Links can preset things for students, e.g. index.html?mode=characters&lessons=3,4 */
+const params = new URLSearchParams(location.search);
+let mode = params.get("mode") === "characters" ? "characters" : "pinyin";
+let selected = new Set((params.get("lessons") || "").split(",").map(Number).filter(n => LESSONS.includes(n)));
+if(!selected.size && LESSONS.length) selected.add(LESSONS[0]);
+let tab = "practice";
+
+const $ = id => document.getElementById(id);
+const nWords = n => n + (n === 1 ? " word" : " words");
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* ================= saved progress (this browser only) ================= */
+/* Per mode, per word: tries, times right, and whether the latest try was right. */
+const STORE = "dictation-progress-v1";
+let progress = { pinyin:{}, characters:{} };
+try { const p = JSON.parse(localStorage.getItem(STORE)); if(p && p.pinyin && p.characters) progress = p; } catch(e){}
+function saveProgress(){ try { localStorage.setItem(STORE, JSON.stringify(progress)); } catch(e){} }
+function record(w, ok){
+  const s = progress[mode][w.w] || (progress[mode][w.w] = { n:0, ok:0, last:false, t:0 });
+  s.n++; if(ok) s.ok++; s.last = ok; s.t = Date.now();
+  saveProgress();
+}
+function statusOf(w){ const s = progress[mode][w.w]; return !s ? "new" : s.last ? "known" : "work"; }
+
+/* ================= round state ================= */
+let queue = [], idx = 0, revealed = false, got = 0, again = [], requeued = new Set();
+let history = [], view = null;   // history of answered cards this round; view = index being looked back at
+
+const current = () => queue[idx];
+const shown = () => view !== null ? history[view].w : current();
+
+/* ================= controls ================= */
+function buildControls(){
+  document.querySelectorAll(".mode button").forEach(b => b.onclick = () => { mode = b.dataset.mode; start(); });
+  document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => { tab = b.dataset.tab; render(); });
+  const pick = $("pick");
+  LESSONS.forEach(n => {
+    const b = document.createElement("button");
+    b.className = "chip"; b.textContent = "L" + n; b.dataset.n = n;
+    b.onclick = () => { selected.has(n) ? selected.delete(n) : selected.add(n); if(!selected.size) selected.add(n); start(); };
+    pick.appendChild(b);
+  });
+  const all = document.createElement("button");
+  all.className = "chip all"; all.textContent = "All lessons";
+  all.onclick = () => { selected = selected.size === LESSONS.length ? new Set([LESSONS[0]]) : new Set(LESSONS); start(); };
+  pick.appendChild(all);
+  $("prev").onclick = goBack;
+  $("play").onclick = () => speak(false);
+  $("slow").onclick = () => speak(true);
+}
+function syncControls(){
+  document.querySelectorAll(".mode button").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === mode));
+  document.querySelectorAll(".chip[data-n]").forEach(b => b.setAttribute("aria-pressed", selected.has(+b.dataset.n)));
+  document.querySelector(".chip.all").setAttribute("aria-pressed", selected.size === LESSONS.length);
+  document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === tab));
+  $("tagline").textContent = mode === "pinyin"
+    ? "Listen, write the pinyin on paper, then check yourself."
+    : "Listen, write the characters on paper, then check them against the stroke order.";
+}
+const lessonLabel = () => {
+  const ls = [...selected].sort((a,b) => a - b);
+  return ls.length === LESSONS.length ? "all lessons" : (ls.length > 1 ? "Lessons " : "Lesson ") + ls.join(", ");
+};
+
+/* ================= rounds ================= */
+function shuffle(a){ for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]} return a; }
+function start(list, label){
+  queue = shuffle(list ? list.slice() : POOL.filter(w => selected.has(w.l)));
+  idx = 0; got = 0; again = []; requeued = new Set(); revealed = false; history = []; view = null;
+  $("count").textContent = label || `${queue.length} words from ${lessonLabel()}, shuffled`;
+  render();
+}
+function mark(ok){
+  const w = current(); if(!w || !revealed || view !== null) return;
+  record(w, ok);
+  history.push({ w, ok });
+  if(ok){ if(!requeued.has(w)) got++; }
+  else {
+    if(!requeued.has(w)){ again.push(w); requeued.add(w); }
+    queue.splice(Math.min(idx + 4 + Math.floor(Math.random() * 3), queue.length), 0, w); // back a few words later
+  }
+  idx++; revealed = false; render(); speak();
+}
+function reveal(){ if(view === null && current() && !revealed){ revealed = true; render(); } }
+
+/* Jump to any word from the progress view: it becomes the next card to answer */
+function practiceWord(w){
+  tab = "practice"; view = null;
+  revealed = false;
+  queue.splice(idx, 0, w);
+  render(); speak();
+}
+
+/* ================= history navigation ================= */
+function goBack(){
+  if(view === null){ if(history.length) view = history.length - 1; }
+  else if(view > 0) view--;
+  render();
+}
+function goForward(){
+  if(view === null) return;
+  view = view < history.length - 1 ? view + 1 : null;
+  render();
+}
+
+/* ================= rendering ================= */
+function render(){
+  syncControls();
+  stopStrokes();
+  $("practice").hidden = tab !== "practice";
+  $("progress").hidden = tab !== "progress";
+  if(tab === "progress") renderProgress(); else renderPractice();
+}
+
+function answerHTML(w){
+  const pos = w.pos.split("/").map(p => POS[p] || p).filter(Boolean).join(" / ");
+  const info = `<p class="py">${esc(w.p)}</p><p class="en">${esc(w.en)}</p>` +
+    `<p class="meta">${[w.l ? "Lesson " + w.l : "", pos].filter(Boolean).join(" · ")}</p>`;
+  return mode === "pinyin"
+    ? `<p class="hz">${esc(w.c)}</p>${info}`
+    : `<div class="strokes" id="strokes"></div>` +
+      (window.HanziWriter ? `<button class="replay" id="replay">Replay stroke order</button>` : "") + info;
+}
+function afterAnswer(w){
+  if(mode !== "characters") return;
+  drawStrokes(w.w);
+  if($("replay")) $("replay").onclick = e => { e.stopPropagation(); playStrokes(); };
+}
+
+function renderPractice(){
+  const sheet = $("sheet"), actions = $("actions"), w = shown();
+  $("tally").textContent = `${got} got · ${again.length} again`;
+  $("prev").disabled = view === 0 || !history.length;
+
+  /* looking back at an earlier word */
+  if(view !== null){
+    const h = history[view];
+    $("where").textContent = `Earlier word ${view + 1} of ${history.length}`;
+    $("play").disabled = $("slow").disabled = false;
+    sheet.innerHTML = `<div class="reveal">${answerHTML(h.w)}<p class="past">You marked this <b class="${h.ok ? "ok" : "no"}">${h.ok ? "got it" : "missed it"}</b></p></div>`;
+    afterAnswer(h.w);
+    actions.innerHTML = view < history.length - 1
+      ? `<button class="btn ghost" id="fwd">Next earlier word →</button><button class="btn" id="cur">Back to current word</button>`
+      : `<button class="btn" id="cur">Back to current word</button>`;
+    if($("fwd")) $("fwd").onclick = goForward;
+    $("cur").onclick = () => { view = null; render(); };
+    return;
+  }
+
+  /* round finished */
+  if(!w){
+    $("where").textContent = `${queue.length} of ${queue.length} done`;
+    $("play").disabled = $("slow").disabled = true;
+    sheet.innerHTML = `<div class="done reveal"><h2>Round done</h2><p>${got} right on the first try, ${again.length} needed another look.</p>` +
+      (again.length ? `<p class="missed">${again.map(x => esc(x.w)).join("　")}</p>` : "") + `</div>`;
+    actions.innerHTML = (again.length ? `<button class="btn" id="redo">Practice the ${again.length} missed</button>` : "") +
+      `<button class="btn ghost" id="restart">New shuffle</button>`;
+    if($("redo")) $("redo").onclick = () => start(again, `Reviewing ${nWords(again.length)} you missed`);
+    $("restart").onclick = () => start();
+    return;
+  }
+
+  $("where").textContent = `Word ${idx + 1} of ${queue.length}`;
+  $("play").disabled = $("slow").disabled = false;
+  if(!revealed){
+    sheet.innerHTML = `<p class="hint">Press play, write the ${mode === "pinyin" ? "pinyin with tone marks" : "characters"}, then show the answer.</p>`;
+    actions.innerHTML = `<button class="btn" id="show">Show answer</button>`;
+    $("show").onclick = reveal;
+    return;
+  }
+  sheet.innerHTML = `<div class="reveal">${answerHTML(w)}</div>`;
+  afterAnswer(w);
+  actions.innerHTML = `<button class="btn miss" id="againBtn">Missed it, ask again</button><button class="btn" id="gotBtn">Got it</button>`;
+  $("againBtn").onclick = () => mark(false);
+  $("gotBtn").onclick = () => mark(true);
+}
+
+function renderProgress(){
+  const box = $("progress");
+  const words = POOL.filter(w => selected.has(w.l));
+  const seen = new Set(), uniq = words.filter(w => !seen.has(w.w) && seen.add(w.w));
+  const c = { known:0, work:0, new:0 };
+  uniq.forEach(w => c[statusOf(w)]++);
+  const pct = k => uniq.length ? (c[k] / uniq.length * 100).toFixed(1) + "%" : "0";
+  const work = uniq.filter(w => statusOf(w) === "work");
+  const fresh = uniq.filter(w => statusOf(w) === "new");
+
+  let html = `<div class="sum"><span>${mode === "pinyin" ? "Pinyin" : "Characters"}, ${lessonLabel()}</span>` +
+    `<span><i class="key known"></i><b>${c.known}</b> known</span><span><i class="key work"></i><b>${c.work}</b> need work</span>` +
+    `<span><i class="key new"></i><b>${c.new}</b> not tried</span></div>` +
+    `<div class="bar"><i class="known" style="width:${pct("known")}"></i><i class="work" style="width:${pct("work")}"></i></div>` +
+    `<div class="pacts">` +
+    `<button class="btn" id="pWork" ${work.length ? "" : "disabled"}>Practice the ${nWords(work.length)} that need${work.length === 1 ? "s" : ""} work</button>` +
+    `<button class="btn ghost" id="pNew" ${fresh.length ? "" : "disabled"}>Practice ${nWords(fresh.length)} not tried</button>` +
+    `<button class="link" id="pReset">Reset ${mode} progress</button></div>`;
+
+  [...selected].sort((a,b) => a - b).forEach(l => {
+    const lw = uniq.filter(w => w.l === l);
+    const k = lw.filter(w => statusOf(w) === "known").length;
+    html += `<div class="lesson"><h3>Lesson ${l}<span>${k} of ${lw.length} known</span></h3><div class="words">` +
+      lw.map(w => {
+        const s = progress[mode][w.w], st = statusOf(w);
+        const tip = s ? `${w.p} · ${s.ok} of ${s.n} right` : `${w.p} · not tried yet`;
+        return `<button class="wchip ${st}" data-i="${POOL.indexOf(w)}" title="${esc(tip)}">${esc(w.w)}</button>`;
+      }).join("") + `</div></div>`;
+  });
+  html += `<p class="pnote">A word counts as known when your latest try was right. Click any word to practice it now. ` +
+    `Progress is saved in this browser on this device.</p>`;
+  box.innerHTML = html;
+
+  box.querySelectorAll(".wchip").forEach(b => b.onclick = () => practiceWord(POOL[+b.dataset.i]));
+  $("pWork").onclick = () => { tab = "practice"; start(work, `Practicing ${nWords(work.length)} that need${work.length === 1 ? "s" : ""} work`); speak(); };
+  $("pNew").onclick = () => { tab = "practice"; start(fresh, `Practicing ${nWords(fresh.length)} not tried yet`); speak(); };
+  $("pReset").onclick = () => {
+    if(confirm(`Clear all saved ${mode} progress? This can't be undone.`)){ progress[mode] = {}; saveProgress(); render(); }
+  };
+}
+
+/* ================= stroke order (Hanzi Writer) ================= */
+let writers = [], strokeRun = 0;
+function drawStrokes(word){
+  const box = $("strokes"); if(!box) return;
+  const chars = [...word];
+  const sz = Math.min(window.innerWidth < 520 ? 92 : 128, Math.floor((box.clientWidth || 600) / chars.length) - 10);
+  box.style.setProperty("--sz", sz + "px");
+  writers = chars.map(ch => {
+    const cell = document.createElement("div");
+    cell.className = "tzg"; box.appendChild(cell);
+    const fallback = () => { cell.innerHTML = `<span class="fallback">${ch}</span>`; };
+    if(!window.HanziWriter){ fallback(); return null; }
+    return HanziWriter.create(cell, ch, {
+      width: sz, height: sz, padding: Math.round(sz * .06),
+      showCharacter: false, showOutline: true,
+      strokeColor: "#2E2A24", outlineColor: "#E3D8C3",
+      strokeAnimationSpeed: 1.1, delayBetweenStrokes: 160,
+      onLoadCharDataError: fallback
+    });
+  });
+  playStrokes();
+}
+function playStrokes(){
+  const run = ++strokeRun, list = writers.filter(Boolean);
+  list.forEach(w => w.hideCharacter());
+  const step = i => {
+    if(run !== strokeRun || i >= list.length) return;
+    list[i].animateCharacter({ onComplete: () => setTimeout(() => step(i + 1), 250) });
+  };
+  step(0);
+}
+function stopStrokes(){ strokeRun++; writers = []; }
+
+/* ================= audio ================= */
+let player = null, fallbackVoice = null;
+function pickVoice(){
+  if(!("speechSynthesis" in window)) return;
+  const vs = speechSynthesis.getVoices().filter(v => /^(zh|cmn)[-_](cn|hans)/i.test(v.lang));
+  const score = v => (/google|tingting|xiaoxiao/i.test(v.name) ? 2 : 0) + (v.localService ? 0 : 1);
+  fallbackVoice = vs.sort((a,b) => score(b) - score(a))[0] || null;
+}
+function speak(slower){
+  const w = tab === "practice" ? shown() : null; if(!w) return;
+  if(player){ player.pause(); player = null; }
+  const btn = $("play");
+  if(HAS_AUDIO.has(w.w)){
+    player = new Audio("audio/" + encodeURIComponent(w.w) + ".mp3");
+    player.preservesPitch = true;
+    player.playbackRate = slower ? SLOWER_RATE : PLAY_RATE;
+    player.onplay = () => btn.classList.add("speaking");
+    player.onended = player.onerror = () => btn.classList.remove("speaking");
+    player.play();
+    return;
+  }
+  if(!PLACEHOLDER_VOICE || !("speechSynthesis" in window)) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(w.w);
+  if(fallbackVoice){ u.voice = fallbackVoice; u.lang = fallbackVoice.lang; } else u.lang = "zh-CN";
+  u.rate = slower ? 0.45 : 0.7;
+  u.onstart = () => btn.classList.add("speaking");
+  u.onend = u.onerror = () => btn.classList.remove("speaking");
+  speechSynthesis.speak(u);
+}
+
+/* ================= setup ================= */
+function notices(){
+  const n = $("notice"), msgs = [];
+  if(!window.WORDS) msgs.push("The word list didn't load. Keep words.js in the same folder as this page.");
+  else if(!POOL.length) msgs.push("No words have recordings yet. Add MP3s to the audio folder and run build.py again.");
+  if(msgs.length){ n.hidden = false; n.textContent = msgs.join(" "); }
+  const missing = POOL.filter(w => !HAS_AUDIO.has(w.w)).length;
+  $("audioNote").textContent = missing && PLACEHOLDER_VOICE
+    ? `Placeholder device voice for ${missing} words without recordings` : "";
+}
+if("speechSynthesis" in window){ pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
+document.addEventListener("keydown", e => {
+  if(e.metaKey || e.ctrlKey || e.altKey || tab !== "practice") return;
+  const k = e.key.toLowerCase();
+  if(k === " "){ e.preventDefault(); speak(false); }
+  else if(k === "s"){ speak(true); }
+  else if(k === "arrowleft"){ e.preventDefault(); goBack(); }
+  else if(k === "arrowright"){ e.preventDefault(); goForward(); }
+  else if(k === "enter" && view === null){ e.preventDefault(); revealed ? mark(true) : reveal(); }
+  else if(k === "a" && revealed && view === null){ mark(false); }
+  else if(k === "r" && mode === "characters" && (revealed || view !== null)){ playStrokes(); }
+});
+buildControls(); notices(); if(LESSONS.length) start();
+</script>
+</body>
+</html>
