@@ -11,7 +11,7 @@
   :root{
     --paper:#EFE6D6; --card:#E4D7C0; --rule:#CDC0A7;
     --ink:#2E2A24; --ink2:#4C4536; --mute:#7C7160;
-    --seal:#AE3826; --sheet:#F7F1E4;
+    --seal:#AE3826; --sheet:#F7F1E4; --green:#3A7D44;
     --serif:"Iowan Old Style","Palatino Linotype","Book Antiqua",Palatino,Georgia,"Times New Roman",serif;
     --sans:"Avenir Next","Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
     --hanzi:"Songti SC","STSong","Noto Serif SC","Source Han Serif SC","Noto Serif CJK SC","SimSun",serif;
@@ -38,8 +38,10 @@
 
   .pick{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:8px}
   .pick .lbl{font-size:13px;color:var(--mute);margin-right:6px}
-  .chip{border:1px solid var(--rule);background:transparent;color:var(--ink2);min-width:38px;height:32px;padding:0 10px;font-size:13.5px}
+  .chip{border:1px solid var(--rule);background:transparent;color:var(--ink2);min-width:38px;height:32px;padding:0 10px;font-size:13.5px;transition:background .15s,border-color .15s}
+  .chip:hover{border-color:var(--seal);color:var(--seal)}
   .chip[aria-pressed="true"]{background:var(--seal);border-color:var(--seal);color:var(--paper)}
+  .chip[aria-pressed="true"]:hover{background:#943020}
   .chip.all{margin-left:6px}
   .count{font-size:13px;color:var(--mute);margin:0 0 18px}
 
@@ -48,7 +50,10 @@
   .top b{color:var(--ink);font-weight:600}
   .listen{display:flex;gap:12px}
   .play{flex:1;height:96px;background:var(--sheet);border:1.5px solid var(--seal);color:var(--seal);
-        display:flex;align-items:center;justify-content:center;gap:14px;font-family:var(--serif);font-size:20px}
+        display:flex;align-items:center;justify-content:center;gap:14px;font-family:var(--serif);font-size:20px;
+        transition:background .2s,transform .1s}
+  .play:not(:disabled):hover{background:#FBF5EA}
+  .play:not(:disabled):active{transform:scale(.98)}
   .play svg{width:30px;height:30px}
   .play.speaking{background:#FBF5EA}
   .slow{width:120px;background:transparent;border:1px solid var(--rule);color:var(--ink2);font-size:14px}
@@ -72,9 +77,19 @@
   .replay{margin-top:12px;border:0;background:transparent;color:var(--seal);font-size:13px;text-decoration:underline;text-underline-offset:3px}
 
   .actions{display:flex;gap:10px;margin-top:16px}
-  .btn{flex:1;height:48px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);font-size:15px}
+  .btn{flex:1;height:48px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);font-size:15px;
+       transition:transform .1s,box-shadow .1s}
+  .btn:active:not(:disabled){transform:scale(.97)}
   .btn.ghost{background:transparent;color:var(--ink);border-color:var(--rule)}
-  .btn.miss{background:transparent;color:var(--seal);border-color:var(--seal)}
+  .btn.miss{background:transparent;color:var(--seal);border-color:var(--seal);font-weight:500}
+  .btn.miss:hover{background:rgba(174,56,38,.08)}
+  .btn.got{background:var(--green);border-color:var(--green);color:#fff;font-weight:600}
+  .btn.got:hover{background:#327038}
+  .btn .ico{display:inline-block;margin-right:6px;vertical-align:-1px}
+
+  /* session progress bar */
+  .sbar{height:4px;background:var(--rule);margin-bottom:18px;border-radius:2px;overflow:hidden}
+  .sbar i{display:block;height:100%;background:var(--green);border-radius:2px;transition:width .35s ease}
 
   .notice{border-left:3px solid var(--seal);background:var(--sheet);padding:10px 14px;font-size:13.5px;line-height:1.5;color:var(--ink2);margin:0 0 16px}
   .foot{display:flex;flex-wrap:wrap;gap:10px 24px;justify-content:space-between;margin-top:18px;font-size:12.5px;color:var(--mute)}
@@ -82,7 +97,14 @@
   .done h2{font-family:var(--serif);font-size:24px;margin:0 0 6px}
   .done p{margin:0;color:var(--ink2)}
   .missed{font-family:var(--hanzi);font-size:18px;margin-top:10px !important}
-  @media (max-width:520px){.hz{font-size:44px}.py{font-size:25px}.slow{width:92px}.play{height:84px;font-size:18px}}
+  @media (max-width:520px){
+    .hz{font-size:44px}.py{font-size:25px}
+    .slow{width:92px}.play{height:84px;font-size:18px}
+    .actions{flex-direction:column}.btn{height:52px}
+    .foot .shortcuts{display:none}
+    .foot .toggle-keys{display:inline}
+  }
+  @media (min-width:521px){.foot .toggle-keys{display:none}}
   @media (prefers-reduced-motion:reduce){.reveal{animation:none}}
   /* view tabs */
   .tabs{display:flex;gap:22px;border-bottom:1px solid var(--rule);margin-bottom:14px}
@@ -146,6 +168,7 @@
   </div>
 
   <main class="card" id="practice">
+    <div class="sbar" id="sbar"><i id="sbarFill" style="width:0"></i></div>
     <div class="top">
       <span class="mid">
         <button class="nav" id="prev" aria-label="Previous word">← Previous</button>
@@ -167,7 +190,9 @@
   <section class="card" id="progress" hidden></section>
 
   <div class="foot">
-    <span><kbd>Space</kbd> play &nbsp; <kbd>S</kbd> even slower &nbsp; <kbd>Enter</kbd> show answer / got it &nbsp; <kbd>A</kbd> again &nbsp; <kbd>←</kbd><kbd>→</kbd> earlier words &nbsp; <kbd>R</kbd> replay strokes</span>
+    <span class="shortcuts"><kbd>Space</kbd> play &nbsp; <kbd>S</kbd> even slower &nbsp; <kbd>Enter</kbd> show answer / got it &nbsp; <kbd>A</kbd> again &nbsp; <kbd>←</kbd><kbd>→</kbd> earlier words &nbsp; <kbd>R</kbd> replay strokes</span>
+    <button class="toggle-keys" onclick="this.nextElementSibling.hidden=!this.nextElementSibling.hidden" style="border:0;background:0;color:var(--mute);font-size:12.5px;text-decoration:underline;padding:0">Keyboard shortcuts</button>
+    <span hidden class="mobile-keys" style="font-size:12px"><kbd>Space</kbd> play · <kbd>S</kbd> slower · <kbd>Enter</kbd> show/got it · <kbd>A</kbd> again · <kbd>←</kbd><kbd>→</kbd> navigate · <kbd>R</kbd> replay</span>
     <span id="audioNote"></span>
   </div>
 </div>
@@ -321,8 +346,13 @@ function afterAnswer(w){
 
 function renderPractice(){
   const sheet = $("sheet"), actions = $("actions"), w = shown();
-  $("tally").textContent = `${got} got · ${again.length} again`;
+  $("tally").innerHTML = `<span style="color:var(--green)">${got} ✓</span> · <span style="color:var(--seal)">${again.length} ✗</span>`;
   $("prev").disabled = view === 0 || !history.length;
+
+  /* session progress bar */
+  const total = queue.length || 1;
+  const answered = Math.min(idx, total);
+  $("sbarFill").style.width = (answered / total * 100).toFixed(1) + "%";
 
   /* looking back at an earlier word */
   if(view !== null){
@@ -346,7 +376,7 @@ function renderPractice(){
     sheet.innerHTML = `<div class="done reveal"><h2>Round done</h2><p>${got} right on the first try, ${again.length} needed another look.</p>` +
       (again.length ? `<p class="missed">${again.map(x => esc(x.w)).join("　")}</p>` : "") + `</div>`;
     actions.innerHTML = (again.length ? `<button class="btn" id="redo">Practice the ${again.length} missed</button>` : "") +
-      `<button class="btn ghost" id="restart">New shuffle</button>`;
+      `<button class="btn ghost" id="restart">⟳ New shuffle</button>`;
     if($("redo")) $("redo").onclick = () => start(again, `Reviewing ${nWords(again.length)} you missed`);
     $("restart").onclick = () => start();
     return;
@@ -362,7 +392,7 @@ function renderPractice(){
   }
   sheet.innerHTML = `<div class="reveal">${answerHTML(w)}</div>`;
   afterAnswer(w);
-  actions.innerHTML = `<button class="btn miss" id="againBtn">Missed it, ask again</button><button class="btn" id="gotBtn">Got it</button>`;
+  actions.innerHTML = `<button class="btn miss" id="againBtn"><span class="ico">✗</span> Missed it</button><button class="btn got" id="gotBtn"><span class="ico">✓</span> Got it</button>`;
   $("againBtn").onclick = () => mark(false);
   $("gotBtn").onclick = () => mark(true);
 }
